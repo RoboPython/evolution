@@ -3,6 +3,8 @@ from pygame.locals import *
 pygame.init()
 
 AREASIZE = 400
+NUMBER_OF_FOOD = 300
+NUMBER_OF_HERBIVORES = 1
 
 
 DISPLAYSURF = pygame.display.set_mode((AREASIZE, AREASIZE))
@@ -39,10 +41,10 @@ class Herbivore(object):
 		self.direction = [random.uniform(-1.00,1.00),random.uniform(-1.00,1.00)]
 		self.targetFood = None
 		self.eaten = 0
-		self.done = False
+		self.sucessful = False
 		self.colour = RED
 		self.alive = True;
-		self.energy = 1000;
+		self.energy = 500;
 
 		self.randomPosition = random.randint(self.size,AREASIZE-self.size/2)
 		self.randomDistribution = random.randint(0,100)
@@ -63,28 +65,35 @@ class Herbivore(object):
 		pygame.draw.rect(DISPLAYSURF, BLACK, (self.x, self.y, self.size, self.size))
 
 
-	def move(self):
+	def move(self,finishedOrDeadHerbivores):
 		
+		if not(self.sucessful ==True or self.alive == False):
+
+			if (self.x < 10 or self.y <10 or self.x >AREASIZE-10-self.size or self.y >AREASIZE-10-self.size) and self.eaten >=1:
+				self.sucessful = True
+				self.colour = BLUE
+				finishedOrDeadHerbivores +=1
+
+			else:
+				self.sucessful = False
+				self.colour = RED
 
 
-		if (self.x < 10 or self.y <10 or self.x >AREASIZE-10-self.size or self.y >AREASIZE-10-self.size) and self.eaten >=1:
-			self.done = True
-			self.colour = BLUE
-		else:
-			self.done = False
-			self.colour = RED
+
+			if not (self.sucessful):
+				self.x += self.speed * self.direction[0]
+				self.y += self.speed * self.direction[1]
+				self.energy -= self.speed*self.speed
 
 
-		if not (self.done):
-			self.x += self.speed * self.direction[0]
-			self.y += self.speed * self.direction[1]
-			self.energy -= self.speed*self.speed
+				if (self.energy<0):
+					self.alive = False
+					self.colour = WHITE
+					self.speed = 0;
+					finishedOrDeadHerbivores +=1
 
-		if (self.energy<0):
-			self.alive = False
-			self.colour = WHITE
-			self.speed = 0;
-
+		return finishedOrDeadHerbivores
+		
 
 
 	
@@ -121,16 +130,20 @@ class Herbivore(object):
 
 eatenFood = []
 food = {}
-for x in xrange(5):
+
+for x in xrange(NUMBER_OF_FOOD):
 	food[x] = Food(x)
 
 for item in food.keys():
 	food[item].draw(GREEN)
 
 
-herbivores = []
-for x in xrange(10):
-	herbivores.append(Herbivore(x))
+herbivores = {}
+herbIDcounter =0
+for x in xrange(NUMBER_OF_HERBIVORES):
+	herbivores[herbIDcounter] = Herbivore(herbIDcounter)
+	herbIDcounter +=1
+
 
 
 def updateFoodList(food):
@@ -139,30 +152,55 @@ def updateFoodList(food):
 		del food[item]
 	return food
 
-def nextDay(food):
-	#not done yet
+def nextDay(food,herbivores,herbIDcounter):
+	for item in herbivores.keys():
+		herbivores[item].undraw()
+
+	
+	new_herbivores = {}
+
+	for item in herbivores.keys():
+		herbie = herbivores[item]
+		if (herbie.sucessful):
+			herbie.targetFood = None
+			herbie.eaten = 0
+			herbie.sucessful = False
+			herbie.colour = RED
+			herbie.alive = True;
+			herbie.energy = 10000000;
+			new_herbivores[herbie.idNumber] = herbie
+			new_herbivores[herbIDcounter] = Herbivore(herbIDcounter)
+			new_herbivores[herbIDcounter].speed = new_herbivores[herbie.idNumber].speed
+			herbIDcounter +=1
+
+
+
+
+
+
+
+
+
+
+
+
 	for item in food.keys():
 		food[item].draw(BLACK)
 
 	food = {}
 
-	for x in xrange(5):
+	for x in xrange(NUMBER_OF_FOOD):
 		food[x] = Food(x)
 
 	for item in food.keys():
 		food[item].draw(GREEN)
 
 
-	return food
+	return [food,new_herbivores,herbIDcounter]
 
 
 
-
-
-
-
-
-
+finishedOrDeadHerbivores = 0
 while True: # main game loop
 	for event in pygame.event.get():
 		if event.type == QUIT:
@@ -174,31 +212,59 @@ while True: # main game loop
 		food[item].draw(GREEN)
 
 	
-	for herbie in herbivores:
+	for item in herbivores.keys():
+		herbie = herbivores[item]
 		herbie.undraw()
 		herbie.chooseDirection()
-		herbie.move()
+		finishedOrDeadHerbivores = herbie.move(finishedOrDeadHerbivores)
 		herbie.draw()	
 
 	food = updateFoodList(food)
 	eatenFood = []
 
-	if(len(food) ==0):
-		canFinish = True
-		for herbie in herbivores:
-			if (herbie.eaten and herbie.alive and not herbie.done):
-				canFinish = False
 
-		if canFinish == True:
-			food = nextDay(food)
+	#idea is to get rid of those that havent eaten but will not find food
+	'''
+	if (len(food) ==0):
+		for item in herbivores.keys():
+			if herbivores[item].eaten == 0:
+				herbivores[item].alive = False
+				herbivores[item].colour = WHITE
+				finishedOrDeadHerbivores += 1
+
+	'''
+
+
+	print finishedOrDeadHerbivores
+	print len(herbivores)
+	print "  "
+	print "-----------------"
+
+
+	if(finishedOrDeadHerbivores == len(herbivores)):
+		nextDayReturns = nextDay(food,herbivores,herbIDcounter)
+		food = nextDayReturns[0]
+		herbivores = nextDayReturns[1]
+		herbIDcounter = nextDayReturns[2]
+		finishedOrDeadHerbivores = 0
+
+		total = 0.00
+		for item in herbivores.keys():
+			herbie = herbivores[item]
+			total += herbie.speed
+		print total/len(herbivores)
 
 
 
-		
+
+
+			
+
+
 
 	
 
-	time.sleep(0.1)
+	time.sleep(0.01)
 
 	
 		
